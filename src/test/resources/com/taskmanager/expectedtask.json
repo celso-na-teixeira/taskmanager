@@ -1,0 +1,8 @@
+{
+  "id": 100,
+  "title": "Wash the dishes",
+  "description": "Description to wash the dishes",
+  "dueDate": "2024-07-30T00:00:00",
+  "completed": false,
+  "userId": 200
+}

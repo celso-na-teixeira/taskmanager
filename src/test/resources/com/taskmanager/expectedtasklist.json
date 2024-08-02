@@ -1,0 +1,26 @@
+[
+  {
+    "id": 100,
+    "title": "Wash the dishes",
+    "description": "Description to wash the dishes",
+    "dueDate": "2024-07-30T00:00:00",
+    "completed": false,
+    "userId": 200
+  },
+  {
+    "id": 101,
+    "title": "Throw the garbage",
+    "description": "Description to throw the garbage",
+    "dueDate": "2024-07-30T00:00:00",
+    "completed": false,
+    "userId": 200
+  },
+  {
+    "id": 102,
+    "title": "Do groceries",
+    "description": "Description to do groceries",
+    "dueDate": "2024-07-30T00:00:00",
+    "completed": true,
+    "userId": 200
+  }
+]
