@@ -1,9 +1,12 @@
 package com.taskmanager.controller;
 
+import com.taskmanager.exception.TaskNotFoundException;
+import com.taskmanager.exception.UserTaskNotFoundException;
 import com.taskmanager.model.Task;
 import com.taskmanager.model.TaskUser;
 import com.taskmanager.repository.TaskRepository;
 import com.taskmanager.repository.UserRepository;
+import com.taskmanager.service.TaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,26 +29,28 @@ public class TaskController {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final TaskService taskService;
 
 
-    public TaskController(TaskRepository taskRepository, UserRepository userRepository) {
+    public TaskController(TaskRepository taskRepository, UserRepository userRepository, TaskService taskService) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
+        this.taskService = taskService;
     }
 
     @GetMapping("/{taskId}")
-    public ResponseEntity<Task> getTask(@PathVariable Long taskId, Principal principal) {
-        log.debug("Fetching task with ID: {}", taskId);
-        Optional<TaskUser> user = userRepository.findByUsername(principal.getName());
-        if (!user.isPresent()) {
-            return ResponseEntity.notFound().build();
+    public ResponseEntity<Task> getTask(@PathVariable final Long taskId, final Principal principal) {
+        log.debug("Fetching task with ID: {} for user: {}", taskId, principal.getName());
+        try {
+            Task task = taskService.getTask(taskId, principal);
+            return ResponseEntity.ok(task);
+        } catch (UserTaskNotFoundException | TaskNotFoundException e) {
+            log.warn("Error fetching task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (Exception e) {
+            log.error("Unexpected error fetching task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        Optional<Task> task = taskRepository.findByIdAndUserId(taskId, user.get().id());
-        if (task.isPresent()) {
-            return ResponseEntity.ok(task.get());
-        }
-        log.warn("Task with ID {} not found", taskId);
-        return ResponseEntity.notFound().build();
     }
 
     @GetMapping

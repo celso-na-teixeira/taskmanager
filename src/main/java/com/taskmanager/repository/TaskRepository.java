@@ -15,6 +15,5 @@ public interface TaskRepository extends CrudRepository <Task, Long>, PagingAndSo
 
     Page<Task> findByUserId(Long userId, PageRequest pageRequest);
 
-    //@Query("SELECT * FROM task WHERE id = :id AND user_id = :userId")
     Optional<Task> findByIdAndUserId(Long id, Long userId);
 }
