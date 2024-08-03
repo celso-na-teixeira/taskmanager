@@ -1,5 +1,6 @@
 package com.taskmanager.controller;
 
+import com.taskmanager.exception.TaskDeleteException;
 import com.taskmanager.exception.TaskNotFoundException;
 import com.taskmanager.exception.UserTaskNotFoundException;
 import com.taskmanager.model.Task;
@@ -57,16 +58,7 @@ public class TaskController {
     public ResponseEntity<List<Task>> getTasks(Pageable pageable, Principal principal) {
         log.debug("Fetching all tasks");
         try {
-            Optional<TaskUser> user = userRepository.findByUsername(principal.getName());
-            if (!user.isPresent()) {
-                return ResponseEntity.notFound().build();
-            }
-            Page<Task> taskPage = taskRepository.findByUserId(user.get().id(),
-                    PageRequest.of(
-                            pageable.getPageNumber(),
-                            pageable.getPageSize(),
-                            pageable.getSortOr(Sort.by(Sort.Direction.ASC, "dueDate"))
-                    ));
+            Page<Task> taskPage = taskService.getTasks(pageable, principal);
             if (taskPage.getContent().isEmpty()) {
                 return ResponseEntity.noContent().build();
             }
@@ -81,12 +73,7 @@ public class TaskController {
     public ResponseEntity<Void> createTask(@RequestBody Task newTaskRequest, UriComponentsBuilder ucb, Principal principal) {
         log.debug("Creating new task: {}", newTaskRequest);
         try {
-            Optional<TaskUser> user = userRepository.findByUsername(principal.getName());
-            if (!user.isPresent()) {
-                return ResponseEntity.notFound().build();
-            }
-            Task newTask = new Task(null, newTaskRequest.title(), newTaskRequest.description(), newTaskRequest.dueDate(), newTaskRequest.completed(), user.get().id());
-            Task savedTask = taskRepository.save(newTask);
+           Task savedTask = taskService.createTask(newTaskRequest, principal);
             URI locationOfNewTask = ucb
                     .path("/api/v1/taskmanager/{id}")
                     .buildAndExpand(savedTask.id())
@@ -101,30 +88,31 @@ public class TaskController {
     @PutMapping("/{taskId}")
     public ResponseEntity<Void> updateTask(@PathVariable Long taskId, @RequestBody Task taskRequest, Principal principal) {
         log.debug("Updating task with ID: {}", taskId);
-        Optional<TaskUser> user = userRepository.findByUsername(principal.getName());
-        if (!user.isPresent()) {
-            return ResponseEntity.notFound().build();
-        }
-        Optional<Task> oldTask = taskRepository.findByIdAndUserId(taskId, user.get().id());
-        if (oldTask.isPresent()) {
-            Task updatedTask = new Task(taskId, taskRequest.title(), taskRequest.description(), taskRequest.dueDate(), taskRequest.completed(), user.get().id());
-            taskRepository.save(updatedTask);
+        try {
+            taskService.updateTask(taskId, taskRequest, principal);
             return ResponseEntity.noContent().build();
+        }catch (UserTaskNotFoundException | TaskNotFoundException e) {
+            log.warn("Error updating task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (Exception e) {
+            log.error("Unexpected error updating task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        log.warn("Task with ID {} not found for update", taskId);
-        return ResponseEntity.notFound().build();
     }
 
     @DeleteMapping("/{taskId}")
-    public ResponseEntity<Void> deleteTask(@PathVariable Long taskId) {
+    public ResponseEntity<Void> deleteTask(@PathVariable Long taskId, Principal principal) {
         log.debug("Deleting task with ID: {}", taskId);
-        Optional<Task> deleteTask = taskRepository.findById(taskId);
-        if (deleteTask.isPresent()) {
-            taskRepository.delete(deleteTask.get());
+        try {
+            taskService.deleteTask(taskId, principal);
             return ResponseEntity.noContent().build();
+        }catch (UserTaskNotFoundException | TaskNotFoundException e) {
+            log.warn("Error deleting task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(null);
+        } catch (TaskDeleteException e) {
+            log.error("Unexpected error deleting task with ID: {}: {}", taskId, e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-        log.warn("Task with ID {} not found for deletion", taskId);
-        return ResponseEntity.notFound().build();
     }
 
 

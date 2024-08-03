@@ -19,6 +19,7 @@ import org.springframework.test.annotation.DirtiesContext;
 
 import java.net.URI;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -30,11 +31,14 @@ public class TaskControllerTest {
     
     private TaskUser[] taskUsers;
 
+    private TaskUser unknownUser;
+
     @BeforeEach
     void setUp() {
         taskUsers = Arrays.array(
                 new TaskUser(200L, "leonardo", "password123", "leonardo@taskmanager.com", "TASK-OWNER"),
                 new TaskUser(201L, "michelangelo", "password123", "michelangelo@taskmanager.com", "TASK-OWNER"));
+        unknownUser = new TaskUser(20001L, "unknownUser", "password123", "michelangelo@taskmanager.com", "TASK-OWNER");
     }
 
     @Test
@@ -176,5 +180,13 @@ public class TaskControllerTest {
                 .withBasicAuth(taskUsers[1].username(), taskUsers[1].password())
                 .exchange("/api/v1/taskmanager/10001", HttpMethod.DELETE, null, Void.class);
         assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void shouldNotDeleteTaskThatUserNotExist() {
+        ResponseEntity<Void> deleteResponse = restTemplate
+                .withBasicAuth(unknownUser.username(), unknownUser.password())
+                .exchange("/api/v1/taskmanager/10001", HttpMethod.DELETE, null, Void.class);
+        assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 }
