@@ -1,11 +1,14 @@
 package com.taskmanager;
 
 import com.taskmanager.exception.*;
+import com.taskmanager.model.Role;
 import com.taskmanager.model.Task;
-import com.taskmanager.model.TaskUser;
+import com.taskmanager.model.TaskStatus;
+import com.taskmanager.model.User;
 import com.taskmanager.repository.TaskRepository;
 import com.taskmanager.repository.UserRepository;
 import com.taskmanager.service.TaskServiceImpl;
+import com.taskmanager.service.TaskUserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +21,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.security.Principal;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -38,27 +40,34 @@ public class TaskServiceImplTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private TaskUserService userService;
+
     @InjectMocks
     private TaskServiceImpl taskService;
 
+
+
     private Principal principal;
-    private TaskUser taskUser;
+    private User user;
     private Task task;
     private Task savedTask;
     private Task updatedTask;
+    private List<Role> roles;
 
     @BeforeEach
     public void setUp() {
+        roles = Collections.singletonList(new Role(400L, "TASK-OWNER"));
         principal = () -> "username";
-        taskUser = new TaskUser(200L, "leonardo", "password123", "leonardo@taskmanager.com", "TASK-OWNER");
-        task = new Task(null, "Wash the car", "Description to wash the car", LocalDateTime.parse("2024-08-16T00:00:00"),false, taskUser.id());
-        savedTask = new Task(103L, "Wash the car", "Description to wash the car", LocalDateTime.parse("2024-08-16T00:00:00"),false, taskUser.id());
-        updatedTask = new Task(103L, "Wash the dishes", "Description to wash the dishes", LocalDateTime.parse("2024-08-17T00:00:00"),true, taskUser.id());
+        user = new User(200L, "leonardo", "password123", "leonardo@taskmanager.com", roles);
+        task = new Task(null, "Wash the car", "Description to wash the car", LocalDateTime.parse("2024-08-16T00:00:00"), TaskStatus.TODO, user.getId());
+        savedTask = new Task(103L, "Wash the car", "Description to wash the car", LocalDateTime.parse("2024-08-16T00:00:00"),TaskStatus.TODO, user.getId());
+        updatedTask = new Task(103L, "Wash the dishes", "Description to wash the dishes", LocalDateTime.parse("2024-08-17T00:00:00"),TaskStatus.COMPLETED, user.getId());
     }
 
     @Test
     public void testGetTask_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(task));
 
         Task result = taskService.getTask(1L, principal);
@@ -67,43 +76,32 @@ public class TaskServiceImplTest {
 
     @Test
     public void testGetTask_UserNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+        when(userService.getUserByUsername(anyString())).thenThrow(new UserTaskNotFoundException("User not found for username: " + principal.getName()));
 
-        assertThrows(UserTaskNotFoundException.class, () -> {
+        UserTaskNotFoundException thrownException = assertThrows(UserTaskNotFoundException.class, () -> {
             taskService.getTask(1L, principal);
         });
+
+        assertEquals("User not found for username: username", thrownException.getMessage());
+
+        // Verify interactions
+        verify(userService).getUserByUsername(anyString());
+        verify(taskRepository, never()).findByIdAndUserId(anyLong(), anyLong());
     }
 
     @Test
     public void testGetTask_TaskNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.empty());
 
         assertThrows(TaskNotFoundException.class, () -> {
             taskService.getTask(1L, principal);
         });
     }
-
-    @Test
-    public void testGetUserByUsername_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
-
-        TaskUser result = taskService.getUserByUsername("username");
-        assertEquals(taskUser, result);
-    }
-
-    @Test
-    public void testGetUserByUsername_UserNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
-
-        assertThrows(UserTaskNotFoundException.class, () -> {
-            taskService.getUserByUsername("username");
-        });
-    }
-
+    
     @Test
     public void testGetTaskByIdAndUser_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(task));
 
         Task result = taskService.getTaskByIdAndUser(1L, "username");
@@ -112,7 +110,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testGetTaskByIdAndUser_UserNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.empty());
+        when(userService.getUserByUsername(anyString())).thenThrow(new UserTaskNotFoundException("User not found for username: " + principal.getName()));
 
         assertThrows(UserTaskNotFoundException.class, () -> {
             taskService.getTaskByIdAndUser(1L, "username");
@@ -121,7 +119,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testGetTaskByIdAndUser_TaskNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.empty());
 
         assertThrows(TaskNotFoundException.class, () -> {
@@ -135,7 +133,7 @@ public class TaskServiceImplTest {
         List<Task> taskList = Collections.singletonList(task);
         Page<Task> taskPage = new PageImpl<>(taskList, pageable, taskList.size());
 
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByUserId(anyLong(), any(PageRequest.class))).thenReturn(taskPage);
 
         Page<Task> result = taskService.getTasks(pageable, principal);
@@ -147,7 +145,7 @@ public class TaskServiceImplTest {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Task> emptyTaskPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
 
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByUserId(anyLong(), any(PageRequest.class))).thenReturn(emptyTaskPage);
 
         assertThrows(TaskNotFoundException.class, () -> {
@@ -159,7 +157,7 @@ public class TaskServiceImplTest {
     public void testGetTasks_Exception() {
         Pageable pageable = PageRequest.of(0, 10);
 
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByUserId(anyLong(), any(PageRequest.class))).thenThrow(new RuntimeException("Database error"));
 
         Exception exception = assertThrows(TaskNotFoundException.class, () -> {
@@ -171,19 +169,19 @@ public class TaskServiceImplTest {
 
     @Test
     public void testCreateTask_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.save(any(Task.class))).thenReturn(savedTask);
 
         Task result = taskService.createTask(task, principal);
         assertEquals(savedTask, result);
 
-        verify(userRepository).findByUsername(principal.getName());
+        verify(userService).getUserByUsername(principal.getName());
         verify(taskRepository).save(any(Task.class));
     }
 
     @Test
     public void testCreateTask_Exception() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.save(any(Task.class))).thenThrow(new RuntimeException("Database error"));
 
         Exception exception = assertThrows(TaskCreationException.class, () -> {
@@ -192,13 +190,13 @@ public class TaskServiceImplTest {
 
         assertEquals("Error creating task for user: username", exception.getMessage());
 
-        verify(userRepository).findByUsername(principal.getName());
+        verify(userService).getUserByUsername(principal.getName());
         verify(taskRepository).save(any(Task.class));
     }
 
     @Test
     public void testUpdateTask_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(savedTask));
 
         taskService.updateTask(1L, updatedTask, principal);
@@ -208,7 +206,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testUpdateTask_TaskNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.empty());
 
         assertThrows(TaskNotFoundException.class, () -> {
@@ -220,7 +218,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testUpdateTask_Exception() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(savedTask));
         doThrow(new RuntimeException("Database error")).when(taskRepository).save(any(Task.class));
 
@@ -235,7 +233,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testDeleteTask_Success() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(savedTask));
         taskService.deleteTask(1L, principal);
         verify(taskRepository).delete(any(Task.class));
@@ -243,7 +241,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testDeleteTask_TaskNotFound() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.empty());
 
         assertThrows(TaskNotFoundException.class, () -> {
@@ -255,7 +253,7 @@ public class TaskServiceImplTest {
 
     @Test
     public void testDeleteTask_Exception() {
-        when(userRepository.findByUsername(anyString())).thenReturn(Optional.of(taskUser));
+        when(userService.getUserByUsername(anyString())).thenReturn(user);
         when(taskRepository.findByIdAndUserId(anyLong(), anyLong())).thenReturn(Optional.of(savedTask));
         doThrow(new NullPointerException("Task is null")).when(taskRepository).delete(any(Task.class));
 

@@ -1,5 +1,6 @@
 package com.taskmanager;
 
+import com.taskmanager.model.TaskStatus;
 import org.assertj.core.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,9 +30,9 @@ public class TaskJsonTest {
     void setUp() {
         LocalDateTime sampleDate = LocalDateTime.of(2024, 7, 30, 0,0);
         tasks = Arrays.array(
-                new Task(100L, "Wash the dishes", "Description to wash the dishes", sampleDate,false, 200L),
-                new Task(101L, "Throw the garbage", "Description to throw the garbage", sampleDate,false, 200L),
-                new Task(102L, "Do groceries", "Description to do groceries", sampleDate,true, 200L)
+                new Task(100L, "Wash the dishes", "Description to wash the dishes", sampleDate, TaskStatus.TODO, 200L),
+                new Task(101L, "Throw the garbage", "Description to throw the garbage", sampleDate,TaskStatus.TODO, 200L),
+                new Task(102L, "Do groceries", "Description to do groceries", sampleDate,TaskStatus.COMPLETED, 200L)
         );
     }
 
@@ -52,9 +53,9 @@ public class TaskJsonTest {
         assertThat(taskJson.write(task)).extractingJsonPathStringValue("@.dueDate")
                 .isEqualTo("2024-07-30T00:00:00");
 
-        assertThat(taskJson.write(task)).hasJsonPathBooleanValue("@.completed");
-        assertThat(taskJson.write(task)).extractingJsonPathBooleanValue("@.completed")
-                .isEqualTo(false);
+        assertThat(taskJson.write(task)).hasJsonPathStringValue("@.status");
+        assertThat(taskJson.write(task)).extractingJsonPathStringValue("@.status")
+                .isEqualTo("TODO");
 
     }
 
@@ -66,7 +67,7 @@ public class TaskJsonTest {
                     "title": "Throw the garbage",
                     "description": "Description to throw the garbage",
                     "dueDate": "2024-07-30T00:00:00",
-                    "completed": false,
+                    "status": "TODO",
                     "userId": 200
                   }
                 """;
@@ -74,10 +75,10 @@ public class TaskJsonTest {
         LocalDateTime sampleDate = LocalDateTime.of(2024, 7, 30, 0,0);
 
         assertThat(taskJson.parse(expectedTask)).isEqualTo(task);
-        assertThat(taskJson.parseObject(expectedTask).id()).isEqualTo(101L);
-        assertThat(taskJson.parseObject(expectedTask).title()).isEqualTo("Throw the garbage");
-        assertThat(taskJson.parseObject(expectedTask).dueDate()).isEqualTo(sampleDate);
-        assertThat(taskJson.parseObject(expectedTask).completed()).isEqualTo(false);
+        assertThat(taskJson.parseObject(expectedTask).getId()).isEqualTo(101L);
+        assertThat(taskJson.parseObject(expectedTask).getTitle()).isEqualTo("Throw the garbage");
+        assertThat(taskJson.parseObject(expectedTask).getDueDate()).isEqualTo(sampleDate);
+        assertThat(taskJson.parseObject(expectedTask).getStatus()).isEqualTo(TaskStatus.TODO);
     }
 
     @Test
@@ -94,7 +95,7 @@ public class TaskJsonTest {
                      "title": "Wash the dishes",
                      "description": "Description to wash the dishes",
                      "dueDate": "2024-07-30T00:00:00",
-                     "completed": false,
+                     "status": "TODO",
                      "userId": 200
                    },
                    {
@@ -102,7 +103,7 @@ public class TaskJsonTest {
                      "title": "Throw the garbage",
                      "description": "Description to throw the garbage",
                      "dueDate": "2024-07-30T00:00:00",
-                     "completed": false,
+                     "status": "TODO",
                      "userId": 200
                    },
                    {
@@ -110,7 +111,7 @@ public class TaskJsonTest {
                      "title": "Do groceries",
                      "description": "Description to do groceries",
                      "dueDate": "2024-07-30T00:00:00",
-                     "completed": true,
+                     "status": "COMPLETED",
                      "userId": 200
                    }
                 ]

@@ -4,15 +4,10 @@ import com.taskmanager.exception.TaskDeleteException;
 import com.taskmanager.exception.TaskNotFoundException;
 import com.taskmanager.exception.UserTaskNotFoundException;
 import com.taskmanager.model.Task;
-import com.taskmanager.model.TaskUser;
-import com.taskmanager.repository.TaskRepository;
-import com.taskmanager.repository.UserRepository;
 import com.taskmanager.service.TaskService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -21,21 +16,15 @@ import org.springframework.web.util.UriComponentsBuilder;
 import java.net.URI;
 import java.security.Principal;
 import java.util.List;
-import java.util.Optional;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/taskmanager")
 public class TaskController {
 
-    private final TaskRepository taskRepository;
-    private final UserRepository userRepository;
     private final TaskService taskService;
 
 
-    public TaskController(TaskRepository taskRepository, UserRepository userRepository, TaskService taskService) {
-        this.taskRepository = taskRepository;
-        this.userRepository = userRepository;
+    public TaskController(TaskService taskService) {
         this.taskService = taskService;
     }
 
@@ -76,7 +65,7 @@ public class TaskController {
            Task savedTask = taskService.createTask(newTaskRequest, principal);
             URI locationOfNewTask = ucb
                     .path("/api/v1/taskmanager/{id}")
-                    .buildAndExpand(savedTask.id())
+                    .buildAndExpand(savedTask.getId())
                     .toUri();
             return ResponseEntity.created(locationOfNewTask).build();
         } catch (Exception e) {
@@ -114,6 +103,4 @@ public class TaskController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
     }
-
-
 }

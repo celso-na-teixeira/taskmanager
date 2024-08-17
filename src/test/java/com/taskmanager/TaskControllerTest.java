@@ -2,11 +2,14 @@ package com.taskmanager;
 
 import com.jayway.jsonpath.DocumentContext;
 import com.jayway.jsonpath.JsonPath;
+import com.taskmanager.model.Role;
 import com.taskmanager.model.Task;
-import com.taskmanager.model.TaskUser;
+import com.taskmanager.model.TaskStatus;
+import com.taskmanager.model.User;
 import net.minidev.json.JSONArray;
 import org.assertj.core.util.Arrays;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,10 +19,12 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
 import java.time.LocalDateTime;
-import java.util.Optional;
+import java.util.Collections;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -29,23 +34,34 @@ public class TaskControllerTest {
     @Autowired
     TestRestTemplate restTemplate;
     
-    private TaskUser[] taskUsers;
+    private User[] users;
+    private List<Role> roles;
 
-    private TaskUser unknownUser;
+    private User unknownUser;
+
+    private static final String BASE_URL = "/api/v1/taskmanager";
 
     @BeforeEach
     void setUp() {
-        taskUsers = Arrays.array(
-                new TaskUser(200L, "leonardo", "password123", "leonardo@taskmanager.com", "TASK-OWNER"),
-                new TaskUser(201L, "michelangelo", "password123", "michelangelo@taskmanager.com", "TASK-OWNER"));
-        unknownUser = new TaskUser(20001L, "unknownUser", "password123", "michelangelo@taskmanager.com", "TASK-OWNER");
+        roles = Collections.singletonList(new Role(400L, "TASK-OWNER"));
+
+        users = Arrays.array(
+                new User(200L, "leonardo", "password123", "leonardo@taskmanager.com", roles),
+                new User(201L, "michelangelo", "password123", "michelangelo@taskmanager.com", roles));
+        unknownUser = new User(20001L, "unknownUser", "password123", "michelangelo@taskmanager.com", roles);
     }
 
     @Test
     void shouldReturnTask() {
+        String taskId = "100";
+        String url = UriComponentsBuilder.fromPath(BASE_URL)
+                .pathSegment(taskId)
+                .toUriString();
+        System.out.println(url);
+
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
-                .getForEntity("/api/v1/taskmanager/100", String.class);
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
+                .getForEntity(url, String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
         LocalDateTime sampleDate = LocalDateTime.of(2024, 8, 15, 0,0);
@@ -59,15 +75,15 @@ public class TaskControllerTest {
         LocalDateTime dueDate = LocalDateTime.parse(documentContext.read("$.dueDate"));
         assertThat(dueDate).isEqualTo(sampleDate);
 
-        Boolean completed = documentContext.read("$.completed");
-        assertThat(completed).isEqualTo(false);
+        TaskStatus status = TaskStatus.valueOf(documentContext.read("$.status"));
+        assertThat(status).isEqualTo(TaskStatus.TODO);
 
     }
 
     @Test
     void shouldNotReturnTaskWithUnknownId() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .getForEntity("/api/v1/taskmanager/1000", String.class);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
@@ -77,7 +93,7 @@ public class TaskControllerTest {
     @Test
     void shouldReturnAllTasks() {
         ResponseEntity<String> response = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .getForEntity("/api/v1/taskmanager", String.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -99,16 +115,16 @@ public class TaskControllerTest {
     @DirtiesContext
     void shouldCreateANewTask() {
         LocalDateTime sampleDate = LocalDateTime.of(2024, 8, 16, 0,0);
-        Task newTask = new Task(null, "Wash the car", "Description to wash the car", sampleDate,false, taskUsers[0].id());
+        Task newTask = new Task(null, "Wash the car", "Description to wash the car", sampleDate,TaskStatus.TODO, users[0].getId());
         ResponseEntity<Void> createResponse = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .postForEntity("/api/v1/taskmanager", newTask, Void.class);
         assertThat(createResponse.getStatusCode()).isEqualTo(HttpStatus.CREATED);
 
         URI locationOfNewTask = createResponse.getHeaders().getLocation();
         System.out.println(locationOfNewTask);
         ResponseEntity<String> getResponse = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .getForEntity(locationOfNewTask, String.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -125,15 +141,15 @@ public class TaskControllerTest {
     @Test
     @DirtiesContext
     void shouldUpdateExistingTask() {
-        Task updatedTask = new Task(100L, "Wash the car", "Description to wash the dishes", LocalDateTime.parse("2024-08-16T00:00:00"),false, taskUsers[0].id());
+        Task updatedTask = new Task(100L, "Wash the car", "Description to wash the dishes", LocalDateTime.parse("2024-08-16T00:00:00"), TaskStatus.TODO, users[0].getId());
         HttpEntity<Task> request = new HttpEntity<>(updatedTask);
         ResponseEntity<Void> response = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .exchange("/api/v1/taskmanager/100", HttpMethod.PUT, request, Void.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
         ResponseEntity<String> getResponse = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .getForEntity("/api/v1/taskmanager/100", String.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
 
@@ -152,10 +168,10 @@ public class TaskControllerTest {
     @Test
     @DirtiesContext
     void shouldNotUpdateTaskThatDoesNotExist() {
-        Task unknownTask = new Task(null, "Wash the car", "Description to wash the dishes", LocalDateTime.parse("2024-08-16T00:00:00"),false, taskUsers[1].id());
+        Task unknownTask = new Task(null, "Wash the car", "Description to wash the dishes", LocalDateTime.parse("2024-08-16T00:00:00"),TaskStatus.TODO, users[1].getId());
         HttpEntity<Task> request = new HttpEntity<>(unknownTask);
         ResponseEntity<Void> response = restTemplate
-                .withBasicAuth(taskUsers[1].username(), taskUsers[1].password())
+                .withBasicAuth(users[1].getUsername(), users[1].getPassword())
                 .exchange("/api/v1/taskmanager/10001", HttpMethod.PUT, request, Void.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -164,12 +180,12 @@ public class TaskControllerTest {
     @DirtiesContext
     void shouldDeleteAnExistingTask() {
         ResponseEntity<Void> response = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .exchange("/api/v1/taskmanager/100", HttpMethod.DELETE, null, Void.class);
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
 
         ResponseEntity<String> getResponse = restTemplate
-                .withBasicAuth(taskUsers[0].username(), taskUsers[0].password())
+                .withBasicAuth(users[0].getUsername(), users[0].getPassword())
                 .getForEntity("/api/v1/taskmanager/100", String.class);
         assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -177,7 +193,7 @@ public class TaskControllerTest {
     @Test
     void shouldNotDeleteTaskThatDoesNotExist() {
         ResponseEntity<Void> deleteResponse = restTemplate
-                .withBasicAuth(taskUsers[1].username(), taskUsers[1].password())
+                .withBasicAuth(users[1].getUsername(), users[1].getPassword())
                 .exchange("/api/v1/taskmanager/10001", HttpMethod.DELETE, null, Void.class);
         assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
@@ -185,7 +201,7 @@ public class TaskControllerTest {
     @Test
     void shouldNotDeleteTaskThatUserNotExist() {
         ResponseEntity<Void> deleteResponse = restTemplate
-                .withBasicAuth(unknownUser.username(), unknownUser.password())
+                .withBasicAuth(unknownUser.getUsername(), unknownUser.getPassword())
                 .exchange("/api/v1/taskmanager/10001", HttpMethod.DELETE, null, Void.class);
         assertThat(deleteResponse.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }

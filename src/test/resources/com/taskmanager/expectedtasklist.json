@@ -4,7 +4,7 @@
     "title": "Wash the dishes",
     "description": "Description to wash the dishes",
     "dueDate": "2024-07-30T00:00:00",
-    "completed": false,
+    "status": "TODO",
     "userId": 200
   },
   {
@@ -12,7 +12,7 @@
     "title": "Throw the garbage",
     "description": "Description to throw the garbage",
     "dueDate": "2024-07-30T00:00:00",
-    "completed": false,
+    "status": "TODO",
     "userId": 200
   },
   {
@@ -20,7 +20,7 @@
     "title": "Do groceries",
     "description": "Description to do groceries",
     "dueDate": "2024-07-30T00:00:00",
-    "completed": true,
+    "status": "COMPLETED",
     "userId": 200
   }
 ]
